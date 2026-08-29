@@ -1,0 +1,44 @@
+<tr data-notice-row="{{ notice.id }}" class="hover:bg-slate-50/70 transition">
+  <td class="px-5 py-4 max-w-sm">
+    <p class="font-semibold text-slate-900 truncate">{{ notice.title }}</p>
+    <p class="text-sm text-slate-500 truncate">{{ notice.description }}</p>
+  </td>
+  <td class="px-5 py-4 text-sm text-slate-600 whitespace-nowrap">{{ notice.notice_date.strftime('%d %b %Y') }}</td>
+  <td class="px-5 py-4">
+    {% if notice.priority == 'urgent' %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-100 px-2.5 py-1 text-xs font-semibold">Urgent</span>
+    {% elif notice.priority == 'important' %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-100 px-2.5 py-1 text-xs font-semibold">Important</span>
+    {% else %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200 px-2.5 py-1 text-xs font-semibold">Normal</span>
+    {% endif %}
+  </td>
+  <td class="px-5 py-4">
+    {% if notice.is_published %}
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 px-2.5 py-1 text-xs font-semibold">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Published
+      </span>
+    {% else %}
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 px-2.5 py-1 text-xs font-semibold">
+        <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span> Draft
+      </span>
+    {% endif %}
+  </td>
+  <td class="px-5 py-4">
+    <div class="flex items-center justify-end gap-2">
+      <button data-action="toggle" data-id="{{ notice.id }}" data-published="{{ notice.is_published|lower }}"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 transition
+                     {{ 'bg-white ring-slate-300 text-slate-600 hover:bg-slate-50' if notice.is_published else 'bg-brand-600 ring-brand-600 text-white hover:bg-brand-700' }}">
+        {{ 'Unpublish' if notice.is_published else 'Publish' }}
+      </button>
+      <button data-action="edit" data-id="{{ notice.id }}"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-300 text-slate-600 hover:bg-slate-50 transition">
+        Edit
+      </button>
+      <button data-action="delete" data-id="{{ notice.id }}"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-red-200 text-red-600 hover:bg-red-50 transition">
+        Delete
+      </button>
+    </div>
+  </td>
+</tr>

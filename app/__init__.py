@@ -31,10 +31,23 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+        _seed_default_admin(app)
 
     register_cli(app)
 
     return app
+
+
+def _seed_default_admin(app):
+    from app.models import Admin
+
+    if Admin.query.first() is not None:
+        return
+
+    admin = Admin(name=app.config["ADMIN_NAME"], email=app.config["ADMIN_EMAIL"].strip().lower())
+    admin.set_password(app.config["ADMIN_PASSWORD"])
+    db.session.add(admin)
+    db.session.commit()
 
 
 def register_cli(app):

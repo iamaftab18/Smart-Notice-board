@@ -14,8 +14,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     ADMIN_NAME = os.environ.get("ADMIN_NAME", "College Admin")
-    ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@college.edu")
-    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+    ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@noticeboard.local")
+    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Board@2026")
 
     BOARD_POLL_SECONDS = int(os.environ.get("BOARD_POLL_SECONDS", 10))
     BOARD_ROTATE_SECONDS = int(os.environ.get("BOARD_ROTATE_SECONDS", 12))

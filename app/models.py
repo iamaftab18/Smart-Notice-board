@@ -26,6 +26,24 @@ class Admin(UserMixin, db.Model):
         return check_password_hash(self.password_hash, raw_password)
 
 
+class Student(db.Model):
+    __tablename__ = "students"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    enrollment_no = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=_utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "enrollment_no": self.enrollment_no,
+            "email": self.email,
+        }
+
+
 PRIORITY_LEVELS = ("normal", "important", "urgent")
 
 

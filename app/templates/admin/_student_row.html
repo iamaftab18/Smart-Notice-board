@@ -1,0 +1,13 @@
+<tr data-student-row="{{ student.id }}" class="hover:bg-slate-50/70 transition">
+  <td class="px-5 py-4 font-semibold text-slate-900">{{ student.name }}</td>
+  <td class="px-5 py-4 text-sm text-slate-600">{{ student.enrollment_no }}</td>
+  <td class="px-5 py-4 text-sm text-slate-600">{{ student.email }}</td>
+  <td class="px-5 py-4">
+    <div class="flex items-center justify-end gap-2">
+      <button data-action="delete" data-id="{{ student.id }}"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-red-200 text-red-600 hover:bg-red-50 transition">
+        Remove
+      </button>
+    </div>
+  </td>
+</tr>

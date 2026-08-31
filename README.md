@@ -12,6 +12,14 @@ mode.
   in large readable type, and keeps showing it until the admin changes
   something. It polls the server every few seconds and updates itself live,
   so nobody ever needs to refresh the display.
+- **Voice announce** — each notice has an "Announce" button that reads its
+  title, date and description aloud through whatever audio output is
+  connected to the device (e.g. a paired Bluetooth speaker), using the
+  system `espeak-ng` text-to-speech engine.
+- **Students + email alerts** — the admin panel has a Students section for
+  adding students (name, enrollment number, email). Every time a notice is
+  published, all students are emailed the title, date and description via
+  SMTP.
 
 ## How it works
 
@@ -34,12 +42,14 @@ app/
   __init__.py         Flask app factory, blueprint registration, `flask seed-admin` CLI
   config.py           Config from environment variables
   extensions.py       SQLAlchemy / Flask-Login / CSRF singletons
-  models.py           Admin and Notice models
+  models.py           Admin, Notice and Student models
+  mailer.py           SMTP email alerts sent to students on publish
   auth/routes.py       /login, /logout
-  admin/routes.py      /admin dashboard + JSON CRUD endpoints
+  admin/routes.py      /admin dashboard + JSON CRUD endpoints, students, announce (TTS)
   board/routes.py      /notice_board + /api/notices/board
   templates/           Jinja templates (Tailwind via CDN)
   static/js/admin.js    Admin dashboard interactivity (fetch-based CRUD, modals, toasts)
+  static/js/students.js Students section interactivity
   static/js/board.js    Notice board polling, rotation, rendering
 run.py                 Dev entrypoint
 requirements.txt
@@ -193,6 +203,45 @@ chmod +x tailwindcss-linux-arm64
 
 Then swap the CDN `<script src="https://cdn.tailwindcss.com">` for
 `<link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.build.css') }}">`.
+
+## Voice announce (text-to-speech)
+
+The "Announce" button on each notice calls the server, which speaks the
+notice through whatever audio device is currently the system default —
+a Bluetooth speaker if one is paired and set as default.
+
+On the Pi, install the offline TTS engine and pair/set the speaker:
+
+```bash
+sudo apt install -y espeak-ng
+bluetoothctl   # pair, trust and connect your speaker, then:
+               # in a desktop session, set it as the default output device
+               # in Sound Settings, or via `pactl set-default-sink <name>`
+```
+
+No internet connection or extra Python package is needed — it shells out
+to `espeak-ng` directly. If it's not installed, the Announce button returns
+a clear error instead of failing silently.
+
+## Email alerts to students
+
+Add students (name, enrollment number, email) from the Students tab in the
+admin panel. Whenever a notice is published, every student is emailed the
+title, date and description via SMTP.
+
+Set these in `.env` (never commit real SMTP credentials):
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=1
+SMTP_USERNAME=your-account@gmail.com
+SMTP_PASSWORD=your-app-password   # Gmail: use an App Password, not your login password
+MAIL_FROM=your-account@gmail.com
+```
+
+Leaving `SMTP_HOST` blank disables email alerts entirely — publishing still
+works, the app just skips sending mail and logs that SMTP isn't configured.
 
 ## Security notes
 

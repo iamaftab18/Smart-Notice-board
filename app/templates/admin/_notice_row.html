@@ -31,6 +31,10 @@
                      {{ 'bg-white ring-slate-300 text-slate-600 hover:bg-slate-50' if notice.is_published else 'bg-brand-600 ring-brand-600 text-white hover:bg-brand-700' }}">
         {{ 'Unpublish' if notice.is_published else 'Publish' }}
       </button>
+      <button data-action="announce" data-id="{{ notice.id }}"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-300 text-slate-600 hover:bg-slate-50 transition">
+        🔊 Announce
+      </button>
       <button data-action="edit" data-id="{{ notice.id }}"
               class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-300 text-slate-600 hover:bg-slate-50 transition">
         Edit

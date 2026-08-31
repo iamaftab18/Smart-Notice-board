@@ -1,10 +1,14 @@
+import shutil
+import subprocess
+import threading
 from datetime import datetime
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import PRIORITY_LEVELS, Notice
+from app.mailer import send_notice_alert
+from app.models import PRIORITY_LEVELS, Notice, Student
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -112,7 +116,18 @@ def publish_notice(notice_id):
 
     notice.is_published = True
     db.session.commit()
-    return jsonify({"ok": True, "notice": notice.to_dict()})
+
+    notice_data = notice.to_dict()
+    recipients = [s.email for s in Student.query.all()]
+    app_obj = current_app._get_current_object()
+    threading.Thread(target=_send_alerts_in_background, args=(app_obj, notice_data, recipients), daemon=True).start()
+
+    return jsonify({"ok": True, "notice": notice_data})
+
+
+def _send_alerts_in_background(app_obj, notice_data, recipients):
+    with app_obj.app_context():
+        send_notice_alert(app_obj, notice_data, recipients)
 
 
 @admin_bp.route("/notices/<int:notice_id>/unpublish", methods=["POST"])
@@ -125,3 +140,89 @@ def unpublish_notice(notice_id):
     notice.is_published = False
     db.session.commit()
     return jsonify({"ok": True, "notice": notice.to_dict()})
+
+
+@admin_bp.route("/notices/<int:notice_id>/announce", methods=["POST"])
+@login_required
+def announce_notice(notice_id):
+    notice = db.session.get(Notice, notice_id)
+    if not notice:
+        return jsonify({"ok": False, "error": "Notice not found."}), 404
+
+    tts_binary = shutil.which("espeak-ng") or shutil.which("espeak")
+    if not tts_binary:
+        return jsonify({
+            "ok": False,
+            "error": "Text-to-speech is not installed on this device. Run: sudo apt install espeak-ng",
+        }), 500
+
+    text = (
+        f"{notice.title}. "
+        f"Date: {notice.notice_date.strftime('%d %B %Y')}. "
+        f"{notice.description}"
+    )
+    threading.Thread(target=_speak, args=(tts_binary, text), daemon=True).start()
+
+    return jsonify({"ok": True})
+
+
+def _speak(tts_binary, text):
+    try:
+        subprocess.run([tts_binary, text], check=False)
+    except Exception:
+        current_app.logger.exception("Failed to play text-to-speech announcement.")
+
+
+# ---------- Students ----------
+
+
+@admin_bp.route("/students")
+@login_required
+def students_page():
+    students = Student.query.order_by(Student.name.asc()).all()
+    return render_template("admin/students.html", students=students)
+
+
+def _parse_student_payload(data):
+    name = (data.get("name") or "").strip()
+    enrollment_no = (data.get("enrollment_no") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+
+    if not name:
+        return None, "Name is required."
+    if not enrollment_no:
+        return None, "Enrollment number is required."
+    if not email or "@" not in email:
+        return None, "Enter a valid email address."
+
+    return {"name": name, "enrollment_no": enrollment_no, "email": email}, None
+
+
+@admin_bp.route("/students", methods=["POST"])
+@login_required
+def create_student():
+    fields, error = _parse_student_payload(request.get_json(silent=True) or request.form)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    if Student.query.filter_by(enrollment_no=fields["enrollment_no"]).first():
+        return jsonify({"ok": False, "error": "A student with this enrollment number already exists."}), 400
+
+    student = Student(**fields)
+    db.session.add(student)
+    db.session.commit()
+
+    return jsonify({"ok": True, "student": student.to_dict()}), 201
+
+
+@admin_bp.route("/students/<int:student_id>", methods=["DELETE"])
+@login_required
+def delete_student(student_id):
+    student = db.session.get(Student, student_id)
+    if not student:
+        return jsonify({"ok": False, "error": "Student not found."}), 404
+
+    db.session.delete(student)
+    db.session.commit()
+
+    return jsonify({"ok": True})

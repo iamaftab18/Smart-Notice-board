@@ -116,6 +116,10 @@
                   class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 transition ${toggleClasses}">
             ${notice.is_published ? "Unpublish" : "Publish"}
           </button>
+          <button data-action="announce" data-id="${notice.id}"
+                  class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-300 text-slate-600 hover:bg-slate-50 transition">
+            🔊 Announce
+          </button>
           <button data-action="edit" data-id="${notice.id}"
                   class="rounded-lg px-3 py-1.5 text-xs font-semibold ring-1 ring-slate-300 text-slate-600 hover:bg-slate-50 transition">
             Edit
@@ -231,6 +235,14 @@
       apiFetch(`/admin/notices/${id}`)
         .then((data) => openNoticeModal("edit", data.notice))
         .catch((err) => showToast(err.message, "error"));
+    } else if (action === "announce") {
+      btn.disabled = true;
+      apiFetch(`/admin/notices/${id}/announce`, { method: "POST" })
+        .then(() => showToast("Announcing on the connected speaker…"))
+        .catch((err) => showToast(err.message, "error"))
+        .finally(() => {
+          btn.disabled = false;
+        });
     } else if (action === "delete") {
       openDeleteModal(id);
     } else if (action === "toggle") {

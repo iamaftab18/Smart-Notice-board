@@ -229,19 +229,12 @@ Add students (name, enrollment number, email) from the Students tab in the
 admin panel. Whenever a notice is published, every student is emailed the
 title, date and description via SMTP.
 
-Set these in `.env` (never commit real SMTP credentials):
-
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USE_TLS=1
-SMTP_USERNAME=your-account@gmail.com
-SMTP_PASSWORD=your-app-password   # Gmail: use an App Password, not your login password
-MAIL_FROM=your-account@gmail.com
-```
-
-Leaving `SMTP_HOST` blank disables email alerts entirely — publishing still
-works, the app just skips sending mail and logs that SMTP isn't configured.
+Works out of the box — `app/config.py` ships with a dedicated sender
+account used only for these alerts. To use a different SMTP account
+instead, set `SMTP_HOST`/`SMTP_USERNAME`/`SMTP_PASSWORD`/etc. in `.env`
+(those override the defaults). Leaving `SMTP_HOST` empty in both places
+disables email alerts — publishing still works, the app just skips
+sending mail.
 
 ## Security notes
 

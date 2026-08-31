@@ -44,6 +44,8 @@ app/
   extensions.py       SQLAlchemy / Flask-Login / CSRF singletons
   models.py           Admin, Notice and Student models
   mailer.py           SMTP email alerts sent to students on publish
+  tts.py              Text-to-speech (espeak-ng render + paplay/aplay playback)
+  gpio_button.py      Built-in physical announce button listener, started by run.py
   auth/routes.py       /login, /logout
   admin/routes.py      /admin dashboard + JSON CRUD endpoints, students, announce (TTS)
   board/routes.py      /notice_board + /api/notices/board
@@ -51,7 +53,8 @@ app/
   static/js/admin.js    Admin dashboard interactivity (fetch-based CRUD, modals, toasts)
   static/js/students.js Students section interactivity
   static/js/board.js    Notice board polling, rotation, rendering
-scripts/gpio_announce_button.py  Physical push-button announcer (Pi GPIO only)
+scripts/gpio_announce_button.py  Standalone button announcer (only needed for
+                                  multi-worker gunicorn setups -- see below)
 run.py                 Dev entrypoint
 requirements.txt
 requirements-gpio.txt  Pi-only deps for the physical announce button
@@ -243,8 +246,8 @@ Announce button, without needing the admin panel open.
 
 **Wiring:** one leg of the button to **GPIO17** (physical pin 11), the
 other leg to **GND** (physical pin 9, or any other GND pin). No resistor
-needed -- the script enables the internal pull-up (`GPIO.PUD_UP`), so the
-pin reads HIGH normally and LOW when pressed.
+needed -- the internal pull-up (`GPIO.PUD_UP`) is enabled in software, so
+the pin reads HIGH normally and LOW when pressed.
 
 **Install the GPIO library** (`RPi.GPIO`; Pi only -- not in
 `requirements.txt` since it doesn't install on Windows/Mac):
@@ -253,72 +256,82 @@ pin reads HIGH normally and LOW when pressed.
 pip install -r requirements-gpio.txt
 ```
 
-**Run it** (reads whatever notices are currently published, via the same
-`/api/notices/board` endpoint the display uses):
+That's it — **the main app listens for the button itself.** `run.py`
+starts a background listener (`app/gpio_button.py`) automatically when
+you run `python3 run.py`, so no second process is needed. If `RPi.GPIO`
+isn't installed (e.g. on your Windows/Mac dev machine), it just logs that
+the button is disabled and the rest of the app runs normally.
 
-```bash
-python3 scripts/gpio_announce_button.py
-```
+**Production with gunicorn + multiple workers — read this:** gunicorn's
+`-w 2` in the systemd service below starts the app **twice**, as two
+separate OS processes. If each one starts its own GPIO listener, a single
+press announces twice (or worse, garbled overlapping audio). Pick one:
 
-**Run it on boot** alongside the Flask service -- create
-`/etc/systemd/system/notice-board-button.service`:
+- Run gunicorn with a single worker (`-w 1`) so the in-app listener only
+  ever starts once, or
+- Keep multiple workers, add `Environment=DISABLE_GPIO_BUTTON=1` to the
+  `notice-board.service` file so the in-app listener never starts, and
+  run the standalone `scripts/gpio_announce_button.py` instead as its
+  own single dedicated service:
 
-```ini
-[Unit]
-Description=Smart Notice Board - Physical Announce Button
-After=network.target notice-board.service
+  ```ini
+  [Unit]
+  Description=Smart Notice Board - Physical Announce Button
+  After=network.target notice-board.service
 
-[Service]
-User=pi
-WorkingDirectory=/home/pi/Smart-Notice-board
-# Needed to reach PulseAudio -- run `id -u pi` and replace 1000 if different.
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-ExecStart=/home/pi/Smart-Notice-board/.venv/bin/python scripts/gpio_announce_button.py
-Restart=always
+  [Service]
+  User=pi
+  WorkingDirectory=/home/pi/Smart-Notice-board
+  # Needed to reach PulseAudio -- run `id -u pi` and replace 1000 if different.
+  Environment=XDG_RUNTIME_DIR=/run/user/1000
+  ExecStart=/home/pi/Smart-Notice-board/.venv/bin/python scripts/gpio_announce_button.py
+  Restart=always
 
-[Install]
-WantedBy=multi-user.target
-```
+  [Install]
+  WantedBy=multi-user.target
+  ```
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now notice-board-button
-```
+  ```bash
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now notice-board-button
+  ```
 
-If the Flask app runs on a different host/port than `127.0.0.1:8000`
-(e.g. the dev server on port 5000), set `NOTICE_BOARD_API_URL` in the
-service's environment accordingly.
+  If the Flask app runs on a different host/port than `127.0.0.1:8000`,
+  set `NOTICE_BOARD_API_URL` in that service's environment accordingly.
+
+The dev server (`python3 run.py`) only ever runs as one process, so
+this doesn't apply there — the built-in listener just works.
 
 ### Troubleshooting: no sound from Announce
 
-Both the web Announce button and the physical button now print a log
-line for every step (button press, which TTS engine/player was found,
-WAV size rendered, and the exact playback error if one occurs). Watch
-that output while testing:
+The web Announce button, the built-in physical button listener inside
+`run.py`, and the standalone `scripts/gpio_announce_button.py` all print
+a log line for every step (button press, which TTS engine/player was
+found, WAV size rendered, and the exact playback error if one occurs).
+Watch that output while testing:
 
 ```bash
-python3 scripts/gpio_announce_button.py         # foreground, physical button
+python3 run.py                                  # foreground, prints [button] and [tts] lines
 # or, if running as services:
-journalctl -u notice-board-button -f            # physical button
-journalctl -u notice-board -f                   # web Announce button
+journalctl -u notice-board -f                   # web Announce button + built-in listener
+journalctl -u notice-board-button -f            # only if using the standalone script/service
 ```
 
 Work through these in order -- each one isolates a different layer, so
 the first one that fails tells you where the problem actually is:
 
-1. **Is the script even running?** Run it in the foreground. You should
-   immediately see `[button] ... script started, importing
-   dependencies...`, then `... initializing GPIO17 ...`, then `...
+1. **Is the listener even starting?** Run `python3 run.py` in the
+   foreground. Within the startup output you should see
+   `[button] ... initializing GPIO17 using RPi.GPIO ...`, then `...
    ready. Listening for button presses...`, and a `... still alive,
    waiting for button presses...` heartbeat every 30 seconds after that.
-   - **Nothing prints at all, not even "script started"** — you're not
-     actually running this file (wrong path, wrong terminal, or it's
-     running as a systemd service and you need `journalctl -u
-     notice-board-button -f` instead of expecting terminal output).
-   - **It prints "script started" then stops** — the `RPi.GPIO` import
-     or `GPIO.setup()` call failed; the error line right after tells you
-     why (commonly: package not installed — `pip install -r
-     requirements-gpio.txt` — or no permission to access GPIO).
+   - **No `[button]` lines at all** — `RPi.GPIO` isn't installed in this
+     venv (`pip install -r requirements-gpio.txt`), or
+     `DISABLE_GPIO_BUTTON=1` is set in the environment/`.env`.
+   - **It logs "initializing" then a FAILED line** — the error message
+     tells you why (commonly: no permission to access GPIO, or the pin
+     already claimed by another running instance — e.g. the standalone
+     script or another worker process still running at the same time).
    - **It reaches "ready" and keeps heartbeating, but pressing the
      button prints nothing** — the process is alive and the software is
      fine; this is now confirmed a wiring problem. Check one leg is on

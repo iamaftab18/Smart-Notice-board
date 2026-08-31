@@ -19,18 +19,27 @@ import time
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from app.tts import speak  # noqa: E402
-
-from gpiozero import Button
-from signal import pause
-
-BOARD_API_URL = os.environ.get("NOTICE_BOARD_API_URL", "http://127.0.0.1:8000/api/notices/board")
-BUTTON_PIN = int(os.environ.get("ANNOUNCE_BUTTON_PIN", 17))
-
 
 def _log(message):
     print(f"[button] {time.strftime('%H:%M:%S')} {message}", flush=True)
+
+
+_log("script started, importing dependencies...")
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.tts import speak  # noqa: E402
+
+try:
+    from gpiozero import Button
+    from signal import pause
+except Exception as exc:
+    _log(f"FAILED to import gpiozero: {exc}")
+    _log("Install it with: pip install -r requirements-gpio.txt "
+         "(inside the project's venv, on the Pi).")
+    sys.exit(1)
+
+BOARD_API_URL = os.environ.get("NOTICE_BOARD_API_URL", "http://127.0.0.1:8000/api/notices/board")
+BUTTON_PIN = int(os.environ.get("ANNOUNCE_BUTTON_PIN", 17))
 
 
 def announce_published_notices():

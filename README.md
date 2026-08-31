@@ -131,6 +131,9 @@ After=network.target
 User=pi
 WorkingDirectory=/home/pi/smart-notice-board
 EnvironmentFile=/home/pi/smart-notice-board/.env
+# Needed for the Announce button to reach PulseAudio -- run `id -u pi` and
+# replace 1000 below if it's different.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/home/pi/smart-notice-board/.venv/bin/gunicorn -w 2 -b 127.0.0.1:8000 run:app
 Restart=always
 
@@ -267,6 +270,8 @@ After=network.target notice-board.service
 [Service]
 User=pi
 WorkingDirectory=/home/pi/Smart-Notice-board
+# Needed to reach PulseAudio -- run `id -u pi` and replace 1000 if different.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/home/pi/Smart-Notice-board/.venv/bin/python scripts/gpio_announce_button.py
 Restart=always
 
@@ -282,6 +287,51 @@ sudo systemctl enable --now notice-board-button
 If the Flask app runs on a different host/port than `127.0.0.1:8000`
 (e.g. the dev server on port 5000), set `NOTICE_BOARD_API_URL` in the
 service's environment accordingly.
+
+### Troubleshooting: no sound from Announce
+
+Both the web Announce button and the physical button now print a log
+line for every step (button press, which TTS engine/player was found,
+WAV size rendered, and the exact playback error if one occurs). Watch
+that output while testing:
+
+```bash
+python3 scripts/gpio_announce_button.py         # foreground, physical button
+# or, if running as services:
+journalctl -u notice-board-button -f            # physical button
+journalctl -u notice-board -f                   # web Announce button
+```
+
+Work through these in order -- each one isolates a different layer, so
+the first one that fails tells you where the problem actually is:
+
+1. **Is the button press even detected?** Run the script in the
+   foreground and press the button. You should see
+   `[button] ... PRESSED` immediately. If nothing prints, it's wiring —
+   check GPIO17 to one leg, GND to the other, and that
+   `ANNOUNCE_BUTTON_PIN` matches how you wired it.
+2. **Does the Pi produce sound at all, outside this app?**
+   ```bash
+   paplay /usr/share/sounds/alsa/Front_Center.wav
+   ```
+   If you hear nothing, this is a Bluetooth/audio setup problem, not the
+   app. Confirm the speaker is paired, connected, and is the default
+   sink: `pactl info | grep 'Default Sink'` and
+   `pactl list short sinks`. Reconnect with `bluetoothctl` if needed.
+3. **Does the TTS pipeline work manually?**
+   ```bash
+   espeak-ng -w /tmp/test.wav "hello world" && paplay /tmp/test.wav
+   ```
+   If this fails, the error message tells you exactly what's wrong
+   (missing package, no default sink, etc.) — the app will report the
+   same error in its `[tts]` log lines.
+4. **Running as a systemd service and steps 2–3 work manually but not
+   as a service?** This is almost always `paplay`/`aplay` being unable
+   to reach the user's PulseAudio session because systemd services
+   don't get `XDG_RUNTIME_DIR` by default. Confirm your UID with
+   `id -u pi`, and make sure the service file has
+   `Environment=XDG_RUNTIME_DIR=/run/user/<that-uid>` (see the service
+   examples above), then `sudo systemctl daemon-reload` and restart it.
 
 ## Email alerts to students
 

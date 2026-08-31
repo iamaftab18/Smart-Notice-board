@@ -15,6 +15,7 @@ systemd service that keeps it running on boot.
 import json
 import os
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -28,16 +29,22 @@ BOARD_API_URL = os.environ.get("NOTICE_BOARD_API_URL", "http://127.0.0.1:8000/ap
 BUTTON_PIN = int(os.environ.get("ANNOUNCE_BUTTON_PIN", 17))
 
 
+def _log(message):
+    print(f"[button] {time.strftime('%H:%M:%S')} {message}", flush=True)
+
+
 def announce_published_notices():
+    _log("PRESSED -- fetching published notices...")
     try:
         with urllib.request.urlopen(BOARD_API_URL, timeout=5) as response:
             data = json.load(response)
     except Exception as exc:
-        print(f"Could not reach notice board API at {BOARD_API_URL}: {exc}")
+        _log(f"Could not reach notice board API at {BOARD_API_URL}: {exc}")
         speak("Could not reach the notice board.")
         return
 
     notices = data.get("notices", [])
+    _log(f"found {len(notices)} published notice(s).")
     if not notices:
         speak("There are no published notices right now.")
         return
@@ -50,13 +57,23 @@ def announce_published_notices():
         )
         ok, error = speak(text)
         if not ok:
-            print(f"Announcement failed: {error}")
+            _log(f"announcement failed: {error}")
+        else:
+            _log(f"announced notice #{notice['id']} OK.")
 
 
 def main():
-    button = Button(BUTTON_PIN, bounce_time=0.2)
+    _log(f"initializing GPIO{BUTTON_PIN} ...")
+    try:
+        button = Button(BUTTON_PIN, bounce_time=0.2)
+    except Exception as exc:
+        _log(f"FAILED to initialize GPIO{BUTTON_PIN}: {exc}")
+        _log("Check the wiring (button leg -> GPIO17, other leg -> GND) and that this "
+             "process has GPIO access (the 'pi' user is normally in the 'gpio' group already).")
+        return
+
     button.when_pressed = announce_published_notices
-    print(f"Listening for button presses on GPIO{BUTTON_PIN} (Ctrl+C to stop)...")
+    _log(f"ready. Listening for button presses on GPIO{BUTTON_PIN} (Ctrl+C to stop)...")
     pause()
 
 

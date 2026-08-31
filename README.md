@@ -51,8 +51,10 @@ app/
   static/js/admin.js    Admin dashboard interactivity (fetch-based CRUD, modals, toasts)
   static/js/students.js Students section interactivity
   static/js/board.js    Notice board polling, rotation, rendering
+scripts/gpio_announce_button.py  Physical push-button announcer (Pi GPIO only)
 run.py                 Dev entrypoint
 requirements.txt
+requirements-gpio.txt  Pi-only deps for the physical announce button
 .env.example           Copy to .env and fill in real values
 ```
 
@@ -222,6 +224,56 @@ bluetoothctl   # pair, trust and connect your speaker, then:
 No internet connection or extra Python package is needed — it shells out
 to `espeak-ng` directly. If it's not installed, the Announce button returns
 a clear error instead of failing silently.
+
+## Physical announce button (GPIO)
+
+A physical push button can trigger the same voice announcement as the web
+Announce button, without needing the admin panel open.
+
+**Wiring:** one leg of the button to **GPIO17** (physical pin 11), the
+other leg to **GND** (physical pin 9, or any other GND pin). No resistor
+needed -- `gpiozero`'s internal pull-up handles it.
+
+**Install the GPIO library** (Pi only -- not in `requirements.txt` since
+it doesn't install on Windows/Mac):
+
+```bash
+pip install -r requirements-gpio.txt
+```
+
+**Run it** (reads whatever notices are currently published, via the same
+`/api/notices/board` endpoint the display uses):
+
+```bash
+python3 scripts/gpio_announce_button.py
+```
+
+**Run it on boot** alongside the Flask service -- create
+`/etc/systemd/system/notice-board-button.service`:
+
+```ini
+[Unit]
+Description=Smart Notice Board - Physical Announce Button
+After=network.target notice-board.service
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/Smart-Notice-board
+ExecStart=/home/pi/Smart-Notice-board/.venv/bin/python scripts/gpio_announce_button.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now notice-board-button
+```
+
+If the Flask app runs on a different host/port than `127.0.0.1:8000`
+(e.g. the dev server on port 5000), set `NOTICE_BOARD_API_URL` in the
+service's environment accordingly.
 
 ## Email alerts to students
 

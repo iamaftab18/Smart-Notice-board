@@ -1,0 +1,5 @@
+# Raspberry Pi only -- install with: pip install -r requirements-gpio.txt
+# Not included in requirements.txt because the hardware backend doesn't
+# install on Windows/Mac dev machines.
+gpiozero==2.0.1
+lgpio==0.2.2.0

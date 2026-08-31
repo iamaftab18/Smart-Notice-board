@@ -212,18 +212,26 @@ The "Announce" button on each notice calls the server, which speaks the
 notice through whatever audio device is currently the system default —
 a Bluetooth speaker if one is paired and set as default.
 
-On the Pi, install the offline TTS engine and pair/set the speaker:
+On the Pi, install the offline TTS engine, a player, and pair/set the
+speaker:
 
 ```bash
-sudo apt install -y espeak-ng
+sudo apt install -y espeak-ng pulseaudio-utils alsa-utils
 bluetoothctl   # pair, trust and connect your speaker, then:
                # in a desktop session, set it as the default output device
                # in Sound Settings, or via `pactl set-default-sink <name>`
 ```
 
-No internet connection or extra Python package is needed — it shells out
-to `espeak-ng` directly. If it's not installed, the Announce button returns
-a clear error instead of failing silently.
+No internet connection is needed — `app/tts.py` renders speech to a
+temporary WAV file with `espeak-ng` and plays it with `paplay` (falling
+back to `aplay`). It deliberately does **not** use espeak's own built-in
+audio output: that works the first time and then goes silent on every
+call after, especially against a Bluetooth sink, because espeak doesn't
+reliably release the audio device. A dedicated player opens and closes
+the device fresh each time, so every Announce press (web or the physical
+button below) works the same way, repeatedly. If `espeak-ng` isn't
+installed, the Announce button returns a clear error instead of failing
+silently.
 
 ## Physical announce button (GPIO)
 

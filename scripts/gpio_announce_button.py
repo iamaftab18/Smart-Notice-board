@@ -14,23 +14,18 @@ systemd service that keeps it running on boot.
 """
 import json
 import os
-import shutil
-import subprocess
+import sys
 import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.tts import speak  # noqa: E402
 
 from gpiozero import Button
 from signal import pause
 
 BOARD_API_URL = os.environ.get("NOTICE_BOARD_API_URL", "http://127.0.0.1:8000/api/notices/board")
 BUTTON_PIN = int(os.environ.get("ANNOUNCE_BUTTON_PIN", 17))
-
-
-def speak(text):
-    tts_binary = shutil.which("espeak-ng") or shutil.which("espeak")
-    if not tts_binary:
-        print("espeak-ng is not installed; run: sudo apt install espeak-ng")
-        return
-    subprocess.run([tts_binary, text], check=False)
 
 
 def announce_published_notices():
@@ -53,7 +48,9 @@ def announce_published_notices():
             f"Date: {notice['notice_date_display']}. "
             f"{notice['description']}"
         )
-        speak(text)
+        ok, error = speak(text)
+        if not ok:
+            print(f"Announcement failed: {error}")
 
 
 def main():

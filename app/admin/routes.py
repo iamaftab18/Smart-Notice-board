@@ -1,5 +1,3 @@
-import shutil
-import subprocess
 import threading
 from datetime import datetime
 
@@ -9,6 +7,8 @@ from flask_login import current_user, login_required
 from app.extensions import db
 from app.mailer import send_notice_alert
 from app.models import PRIORITY_LEVELS, Notice, Student
+from app.tts import is_available as tts_is_available
+from app.tts import speak as tts_speak
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -149,8 +149,7 @@ def announce_notice(notice_id):
     if not notice:
         return jsonify({"ok": False, "error": "Notice not found."}), 404
 
-    tts_binary = shutil.which("espeak-ng") or shutil.which("espeak")
-    if not tts_binary:
+    if not tts_is_available():
         return jsonify({
             "ok": False,
             "error": "Text-to-speech is not installed on this device. Run: sudo apt install espeak-ng",
@@ -161,16 +160,17 @@ def announce_notice(notice_id):
         f"Date: {notice.notice_date.strftime('%d %B %Y')}. "
         f"{notice.description}"
     )
-    threading.Thread(target=_speak, args=(tts_binary, text), daemon=True).start()
+    app_obj = current_app._get_current_object()
+    threading.Thread(target=_speak_in_background, args=(app_obj, text), daemon=True).start()
 
     return jsonify({"ok": True})
 
 
-def _speak(tts_binary, text):
-    try:
-        subprocess.run([tts_binary, text], check=False)
-    except Exception:
-        current_app.logger.exception("Failed to play text-to-speech announcement.")
+def _speak_in_background(app_obj, text):
+    ok, error = tts_speak(text)
+    if not ok:
+        with app_obj.app_context():
+            app_obj.logger.warning("Announce failed: %s", error)
 
 
 # ---------- Students ----------

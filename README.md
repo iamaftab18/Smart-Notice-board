@@ -243,10 +243,11 @@ Announce button, without needing the admin panel open.
 
 **Wiring:** one leg of the button to **GPIO17** (physical pin 11), the
 other leg to **GND** (physical pin 9, or any other GND pin). No resistor
-needed -- `gpiozero`'s internal pull-up handles it.
+needed -- the script enables the internal pull-up (`GPIO.PUD_UP`), so the
+pin reads HIGH normally and LOW when pressed.
 
-**Install the GPIO library** (Pi only -- not in `requirements.txt` since
-it doesn't install on Windows/Mac):
+**Install the GPIO library** (`RPi.GPIO`; Pi only -- not in
+`requirements.txt` since it doesn't install on Windows/Mac):
 
 ```bash
 pip install -r requirements-gpio.txt
@@ -305,11 +306,25 @@ journalctl -u notice-board -f                   # web Announce button
 Work through these in order -- each one isolates a different layer, so
 the first one that fails tells you where the problem actually is:
 
-1. **Is the button press even detected?** Run the script in the
-   foreground and press the button. You should see
-   `[button] ... PRESSED` immediately. If nothing prints, it's wiring —
-   check GPIO17 to one leg, GND to the other, and that
-   `ANNOUNCE_BUTTON_PIN` matches how you wired it.
+1. **Is the script even running?** Run it in the foreground. You should
+   immediately see `[button] ... script started, importing
+   dependencies...`, then `... initializing GPIO17 ...`, then `...
+   ready. Listening for button presses...`, and a `... still alive,
+   waiting for button presses...` heartbeat every 30 seconds after that.
+   - **Nothing prints at all, not even "script started"** — you're not
+     actually running this file (wrong path, wrong terminal, or it's
+     running as a systemd service and you need `journalctl -u
+     notice-board-button -f` instead of expecting terminal output).
+   - **It prints "script started" then stops** — the `RPi.GPIO` import
+     or `GPIO.setup()` call failed; the error line right after tells you
+     why (commonly: package not installed — `pip install -r
+     requirements-gpio.txt` — or no permission to access GPIO).
+   - **It reaches "ready" and keeps heartbeating, but pressing the
+     button prints nothing** — the process is alive and the software is
+     fine; this is now confirmed a wiring problem. Check one leg is on
+     GPIO17 (physical pin 11), the other on GND (physical pin 9), the
+     button itself isn't faulty, and `ANNOUNCE_BUTTON_PIN` wasn't set to
+     a different pin in the environment.
 2. **Does the Pi produce sound at all, outside this app?**
    ```bash
    paplay /usr/share/sounds/alsa/Front_Center.wav
